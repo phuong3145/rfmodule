@@ -1,4 +1,3 @@
-// telegramDataFetcher.js
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
@@ -28,25 +27,9 @@ export class TelegramDataFetcher {
     return `${formatNumber(day)}/${formatNumber(month)}/${year} ${formatNumber(hours)}:${formatNumber(minutes)}`;
   }
 
-  writeTgdata(accID, tg_login) {
-    try {
-      const accountsData = fs.readFileSync(this.pathToAccount, 'utf8').split('\n').filter(line => line.trim() !== '');
-      const accounts = accountsData.map(line => line.split(','));
-      const accountIndex = accounts.findIndex(account => account[0] === accID);
-      
-      if (accountIndex !== -1) {
-        accounts[accountIndex][2] = tg_login;
-        const updatedData = accounts.map(account => account.join(',')).join('\n');
-        fs.writeFileSync(this.pathToAccount, updatedData);
-      }
-    } catch (error) {
-      console.error(`Error writing Telegram data: ${error}`);
-    }
-  }
-
   async checkProxy(proxy) {
     if (!proxy) return false;
-    
+
     const proxyUrl = 'http://' + proxy;
     const proxyAgent = new HttpsProxyAgent(proxyUrl);
     try {
@@ -70,19 +53,19 @@ export class TelegramDataFetcher {
     if (proxy) {
       const [credentials, address] = proxy.split('@');
       const [username, password] = credentials.split(':');
-      browser = await puppeteer.launch({ 
-        headless: true, 
-        defaultViewport: null, 
-        args: [`--proxy-server=http://${address}`] 
+      browser = await puppeteer.launch({
+        headless: true,
+        defaultViewport: null,
+        args: [`--proxy-server=http://${address}`]
       });
       page = await browser.newPage();
       await page.authenticate({ username, password });
       console.log(`Sử dụng Proxy: ${proxy}`);
       console.log('-'.repeat(50));
     } else {
-      browser = await puppeteer.launch({ 
-        headless: true, 
-        defaultViewport: null 
+      browser = await puppeteer.launch({
+        headless: true,
+        defaultViewport: null
       });
       page = await browser.newPage();
     }
@@ -94,9 +77,9 @@ export class TelegramDataFetcher {
   async GetTgData(accID, proxy) {
     const time = this.GetTime();
     const randomAgent = this.userAgents.Chrome[Math.floor(Math.random() * this.userAgents.Chrome.length)];
-    
+
     const isProxyWorking = !proxy || await this.checkProxy(proxy);
-    
+
     if (!isProxyWorking) {
       console.error('\x1b[31m%s\x1b[0m', `${time} Proxy ${proxy} không hoạt động.` + '\n' + '-'.repeat(50));
       fs.appendFileSync(this.pathToLogProxy, `${time} Proxy ${proxy} không hoạt động.\n`);
@@ -130,6 +113,7 @@ export class TelegramDataFetcher {
         const iframeElement = await page.$('iframe.payment-verification');
         const iframeSrc = await page.evaluate(iframe => iframe.src, iframeElement);
 
+        let tg_login = null;
         if (iframeSrc?.includes('tgWebAppData=')) {
           const url = new URL(iframeSrc);
           const params = new URLSearchParams(url.hash.slice(1));
@@ -146,14 +130,13 @@ export class TelegramDataFetcher {
               }
             });
 
-            const newSrc = newParams.join('&');
-            this.writeTgdata(accID, newSrc);
+            tg_login = newParams.join('&');
           }
         }
 
         await wait(10000);
         await browser.close();
-        return { success: true };
+        return { success: true, tg_login };
 
       } catch (error) {
         console.error('\x1b[31m%s\x1b[0m', `Lỗi quá trình lấy TgData ${time} ${accID}: ${error}` + '\n' + '-'.repeat(50));
